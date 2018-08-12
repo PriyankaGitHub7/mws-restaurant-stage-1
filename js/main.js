@@ -1,17 +1,31 @@
+
 let restaurants,
   neighborhoods,
   cuisines
 var newMap
 var markers = []
+var dbPromise
 
 /**
  * Fetch neighborhoods and cuisines as soon as the page is loaded.
  */
 document.addEventListener('DOMContentLoaded', (event) => {
-  initMap(); // added 
+  initMap(); // added
+  self.dbPromise = openDatabase();
   fetchNeighborhoods();
   fetchCuisines();
+    if (!navigator.serviceWorker) return;
+    navigator.serviceWorker.register('/sw.js').then(function(reg) {
+    });
 });
+
+openDatabase = () => {
+  return idb.open('LocalRestauarantDb', 2, function(upgradeDb) {
+    upgradeDb.createObjectStore('restaurants', {
+      keyPath: 'id'
+    });
+  });
+}
 
 /**
  * Fetch all neighborhoods and set their HTML.
@@ -118,8 +132,18 @@ updateRestaurants = () => {
     if (error) { // Got an error!
       console.error(error);
     } else {
-      resetRestaurants(restaurants);
-      fillRestaurantsHTML();
+        console.log(restaurants);
+        self.dbPromise.then(function(db) {
+          if (!db) return;
+          var tx = db.transaction('restaurants', 'readwrite');
+          var store = tx.objectStore('restaurants');
+          restaurants.forEach(function(restaurant) {
+            store.put(restaurant);
+          });
+        }).catch(function(error) {
+            console.log(error);
+        });    
+        resetRestaurants(restaurants);
     }
   })
 }
@@ -138,7 +162,20 @@ resetRestaurants = (restaurants) => {
     self.markers.forEach(marker => marker.remove());
   }
   self.markers = [];
-  self.restaurants = restaurants;
+  // self.restaurants = restaurants;
+  readFromIDB();
+  // fillRestaurantsHTML();
+}
+
+readFromIDB = () => {
+  self.dbPromise.then(function(db) {
+      if (!db) return;
+      var tx = db.transaction('restaurants', 'readwrite');
+      tx.objectStore('restaurants').getAll().then(function(result) {
+          self.restaurants = result;
+          fillRestaurantsHTML();
+      })
+  });
 }
 
 /**
